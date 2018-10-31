@@ -59,7 +59,7 @@ def piano_roll_to_pretty_midi(piano_roll, fs=100, program=2):
                 prev_velocities[note] = velocity
         else:
             pm_note = pretty_midi.Note(
-                velocity=prev_velocities[note],
+                velocity=50,
                 pitch=note,
                 start=note_on_time[note],
                 end=time)
@@ -141,9 +141,7 @@ def visualize_piano_roll(pianoroll_matrix,fs=5):
         effect: generates a nice graph with the piano roll visualization
     """
     if(pianoroll_matrix.shape[0]==128):
-        print(pianoroll_matrix)
         pianoroll_matrix=pianoroll_matrix.T.astype(float)
-        print(pianoroll_matrix)
     track = pproll.Track(pianoroll=pianoroll_matrix, program=0, is_drum=False, name='piano roll')
     # Plot the piano-roll
     fig, ax = track.plot(beat_resolution=fs)
