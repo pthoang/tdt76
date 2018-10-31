@@ -107,10 +107,10 @@ class Generalist:
     def build_gen_music_model(self):
         model = keras.Sequential()
 
-        model.add(keras.layers.LSTM(self.dims[1], return_sequences=True, stateful=False,
+        model.add(keras.layers.LSTM(self.dims[1], return_sequences=True, stateful=True,
                                     batch_input_shape=(1, None, 128)))
         for dim in self.dims[2:-1]:
-            model.add(keras.layers.LSTM(dim, return_sequences=True, stateful=False))
+            model.add(keras.layers.LSTM(dim, return_sequences=True, stateful=True))
             model.add(keras.layers.Dropout(0.2))
 
         model.add(keras.layers.Dense(self.dims[len(self.dims) - 1], activation='linear'))
@@ -137,7 +137,7 @@ class Generalist:
             step = [(x - min)/(max-min) for x in step]
             if(self.check_end_of_song(step)):
                 break
-            new_step = [1 if x > 0.2 else 0 for x in step]
+            new_step = [1 if x > 0.5 else 0 for x in step]
             result.append(new_step)
 
         for i in range(100*fs):
@@ -147,8 +147,7 @@ class Generalist:
             step = [(x - min) / (max - min) for x in step]
             if(self.check_end_of_song(step)):
                 break
-            new_step = [1 if x > 0.4 else 0 for x in step]
-            print(new_step)
+            new_step = [1 if x > 0.5 else 0 for x in step]
             result.append(new_step)
 
 
