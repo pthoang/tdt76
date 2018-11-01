@@ -8,9 +8,10 @@ from sklearn import preprocessing
 
 class Generalist:
 
-    def __init__(self, dims, train_data, saved_model=None):
+    def __init__(self, dims, train_data, batch_size, saved_model=None):
         self.dims = dims
         self.train_data = train_data
+        self.batch_size = batch_size
 
         self.model = keras.models.load_model(saved_model) if saved_model else self.build_network()
         if not saved_model: self.init_network()
@@ -22,19 +23,19 @@ class Generalist:
 
         model = keras.Sequential()
 
-        model.add(keras.layers.LSTM(self.dims[1], return_sequences=True, stateful=False, batch_input_shape=(len(self.train_data),None, 128)))
+        model.add(keras.layers.LSTM(self.dims[1], return_sequences=True, stateful=False, batch_input_shape=(self.batch_size,None, 128)))
         for dim in self.dims[2:-1]:
             model.add(keras.layers.LSTM(dim, return_sequences=True, stateful=False))
             model.add(keras.layers.Dropout(0.2))
 
-        model.add(keras.layers.Dense(self.dims[len(self.dims)-1], activation='linear'))
+        model.add(keras.layers.Dense(self.dims[len(self.dims)-1], activation='relu'))
 
 
         return model
 
     def init_network(self):
         self.model.compile(
-            optimizer=tf.keras.optimizers.Adam(0.01),
+            optimizer=tf.keras.optimizers.RMSprop(0.005),
             loss='mse'
         )
 
@@ -75,7 +76,7 @@ class Generalist:
 
         print(X.shape)
 
-        self.model.fit(X, Y, epochs=epochs, batch_size=len(self.train_data))
+        self.model.fit(X, Y, epochs=epochs, batch_size=self.batch_size)
 
         # for i in range(epochs):
         #     print("Epoch number: " + str(i+1))
@@ -102,7 +103,7 @@ class Generalist:
         self.model.save(path)
 
     def check_end_of_song(self, step):
-        return len(list(filter(lambda x: x > 0.1, step))) == 128
+        return len(list(filter(lambda x: x > 0.5, step))) == 128
 
     def build_gen_music_model(self):
         model = keras.Sequential()
@@ -113,7 +114,7 @@ class Generalist:
             model.add(keras.layers.LSTM(dim, return_sequences=True, stateful=True))
             model.add(keras.layers.Dropout(0.2))
 
-        model.add(keras.layers.Dense(self.dims[len(self.dims) - 1], activation='linear'))
+        model.add(keras.layers.Dense(self.dims[len(self.dims) - 1], activation='sigmoid'))
 
         old_weights = self.model.get_weights()
 
@@ -125,30 +126,37 @@ class Generalist:
 
         model = self.build_gen_music_model()
 
-        print(init)
+
 
         pred = model.predict(init.reshape(1, init.shape[0], init.shape[1]))
 
 
 
         for step in pred[0]:
-            max = np.amax(step)
-            min = np.amin(step)
-            step = [(x - min)/(max-min) for x in step]
+            # max = np.amax(step)
+            # min = np.amin(step)
+            # step = [(x - min)/(max-min) for x in step]
             if(self.check_end_of_song(step)):
+                print(step)
                 break
             new_step = [1 if x > 0.5 else 0 for x in step]
             result.append(new_step)
 
+        model.reset_states()
+        X = init
+        X = np.append(X, result[-1:], axis=0)
         for i in range(100*fs):
-            step = model.predict(np.array(result[-1:]).reshape(1, 1, 128))[0][0]
-            max = np.amax(step)
-            min = np.amin(step)
-            step = [(x - min) / (max - min) for x in step]
+            step = model.predict(X.reshape(1, X.shape[0], X.shape[1]))[0][-1]
+            # max = np.amax(step)
+            # min = np.amin(step)
+            # step = [(x - min) / (max - min) for x in step]
             if(self.check_end_of_song(step)):
                 break
             new_step = [1 if x > 0.5 else 0 for x in step]
             result.append(new_step)
+            X = np.append(X, result[-1:], axis=0)
+            model.reset_states()
+
 
 
         return np.array(result).T

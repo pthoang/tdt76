@@ -17,14 +17,14 @@ def main():
 
     # dataprep.visualize_piano_roll(training_data[0], fs=5)
 
-    generalist = Generalist([128, 31, 31, 31, 128], training_data, 'generalist.h5')
-    # generalist.train_network(50)
+    data = training_data[:3]
+    generalist = Generalist([128, 43, 43, 43, 128], data, len(data), 'generalist.h5')
+    generalist.train_network(10)
 
     path = 'generalist.h5'
-    # generalist.save_network(path)
+    generalist.save_network(path)
     generalist_result = generalist.gen_music(test.T, fs=5)
 
-    dataprep.visualize_piano_roll(test)
     dataprep.visualize_piano_roll(generalist_result, fs=5)
     dataprep.piano_roll_to_mid_file(generalist_result, 'gen_res1.mid', fs=5)
 
