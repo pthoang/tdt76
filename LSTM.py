@@ -35,7 +35,7 @@ class Generalist:
 
     def init_network(self):
         self.model.compile(
-            optimizer=tf.keras.optimizers.RMSprop(0.005),
+            optimizer=tf.keras.optimizers.RMSprop(0.003),
             loss='mse'
         )
 
@@ -114,7 +114,7 @@ class Generalist:
             model.add(keras.layers.LSTM(dim, return_sequences=True, stateful=True))
             model.add(keras.layers.Dropout(0.2))
 
-        model.add(keras.layers.Dense(self.dims[len(self.dims) - 1], activation='sigmoid'))
+        model.add(keras.layers.Dense(self.dims[len(self.dims) - 1], activation='relu'))
 
         old_weights = self.model.get_weights()
 
@@ -133,9 +133,9 @@ class Generalist:
 
 
         for step in pred[0]:
-            # max = np.amax(step)
-            # min = np.amin(step)
-            # step = [(x - min)/(max-min) for x in step]
+            max = np.amax(step)
+            min = np.amin(step)
+            step = [(x - min)/(max-min) for x in step]
             if(self.check_end_of_song(step)):
                 print(step)
                 break
@@ -147,9 +147,9 @@ class Generalist:
         X = np.append(X, result[-1:], axis=0)
         for i in range(100*fs):
             step = model.predict(X.reshape(1, X.shape[0], X.shape[1]))[0][-1]
-            # max = np.amax(step)
-            # min = np.amin(step)
-            # step = [(x - min) / (max - min) for x in step]
+            max = np.amax(step)
+            min = np.amin(step)
+            step = [(x - min) / (max - min) for x in step]
             if(self.check_end_of_song(step)):
                 break
             new_step = [1 if x > 0.5 else 0 for x in step]
