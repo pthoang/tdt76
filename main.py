@@ -54,7 +54,7 @@ def main():
     names = copy.deepcopy(names_f1)
     names.extend(names_f2)
     unique_names = sorted(list(set(names)))
-    names_index = [[unique_names.index(name)] for name in names]
+    names_index = [[[unique_names.index(name)]] for name in names]
 
 
     training_data = copy.deepcopy(training_data_f1)
@@ -63,29 +63,33 @@ def main():
     training_data.extend(training_data_f2)
     # training_data.extend(training_data_f1)
 
-    test = dataprep.test_piano_roll(training_data_f5[0], 15, fs=5)
+    song_index = 0
+    test = dataprep.test_piano_roll(training_data_f5[song_index], 15, fs=5)
     # dataprep.piano_roll_to_mid_file(training_data[0], 'test1.mid', fs=5)
 
     # dataprep.visualize_piano_roll(training_data[0], fs=5)
 
-    path = 'generalist_lstm_v2.h5'
-    generalist = c.Generalist([128, 97, 128], len(training_data_f5), 'lstm')
+    path = 'generalist_lstm.h5'
+    generalist = c.Generalist([128, 97, 128], len(training_data_f5), 'lstm', path)
     # generalist = c.Generalist([128, 43,43,43, 128], len(training_data_f5), 'gru')
 
-    X, Y = preprocess_data(training_data_f5)
+    X, Y = preprocess_data(training_data)
 
-    generalist.train_network(500, X, Y)
+    # generalist.train_network(500, X, Y)
 
     # generalist.save_network(path)
-    generalist_result = generalist.gen_music(test.T, fs=5)
+    # generalist_result = generalist.gen_music(test.T, fs=5)
 
-    dataprep.visualize_piano_roll(generalist_result, fs=5)
-    dataprep.piano_roll_to_mid_file(generalist_result, 'gen_res1.mid', fs=2)
+    # dataprep.visualize_piano_roll(generalist_result, fs=5)
+    # dataprep.piano_roll_to_mid_file(generalist_result, 'gen_res1.mid', fs=2)
 
-    # specialist = c.Specialist([128, 97, 128], len(training_data_f5), len(unique_names), generalist)
+    specialist = c.Specialist([128, 97, 128], len(training_data_f5), len(unique_names), generalist)
 
+    # specialist.train_network(1, X, Y, np.array(names_index))
 
+    specialist_result = specialist.gen_music(test.T, np.array([names_index[song_index]]), fs=5)
 
+    dataprep.visualize_piano_roll(specialist_result, fs=5)
 
 
 
