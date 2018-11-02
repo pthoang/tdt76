@@ -117,7 +117,7 @@ class Generalist:
             if(check_end_of_song(step)):
                 print(step)
                 break
-            new_step = [1 if x > 0.2 else 0 for x in step]
+            new_step = [1 if x > 0.15 else 0 for x in step]
             result.append(new_step)
 
         # model.reset_states()
@@ -131,7 +131,7 @@ class Generalist:
             # step = [(x - min) / (max - min) for x in step]
             if(check_end_of_song(step)):
                 break
-            new_step = [1 if x > 0.2 else 0 for x in step]
+            new_step = [1 if x > 0.15 else 0 for x in step]
             result.append(new_step)
             # X = np.append(X, result[-1:], axis=0)
 
@@ -182,12 +182,23 @@ class Specialist:
         self.num_tags = num_tags
         self.generalist = generalist.model
 
-        self.model, self.encoder_model, self.decoder_model = self.build_network()
+
+        if saved_model:
+            self.model = keras.models.load_model(saved_model)
+            self.encoder_model = keras.models.load_model('encoder_' + saved_model)
+            self.decoder_model = keras.models.load_model('decoder_' + saved_model)
+
+        else:
+            self.model, self.encoder_model, self.decoder_model = self.build_network()
+            self.model.compile(
+                optimizer=tf.keras.optimizers.RMSprop(0.001),
+                loss='mse'
+            )
 
 
     def build_network(self, gen_music=False):
 
-        encoder_inputs = keras.layers.Input(shape=(1,1))
+        encoder_inputs = keras.layers.Input(shape=(self.num_tags,1))
 
         decoder_inputs = keras.layers.Input(shape=(None, 128))
 
@@ -226,7 +237,6 @@ class Specialist:
             model.layers[layer_i].set_weights(self.generalist.layers[i].get_weights())
 
 
-
         # inference models
         encoder_model = keras.Model(encoder_inputs, init_state)
 
@@ -235,7 +245,8 @@ class Specialist:
         decoder_init_state = [decoder_state_h, decoder_state_c]
 
         decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs,
-                                                         initial_state=decoder_init_state)
+                                                         initial_state=decoder_init_state
+                                                         )
 
         decoder_state = [state_h, state_c]
 
@@ -243,15 +254,19 @@ class Specialist:
 
         decoder_model = keras.Model([decoder_inputs] + decoder_init_state,
                                     [decoder_outputs] + decoder_state)
+        # decoder_model = keras.Model(decoder_inputs,
+        #                             decoder_outputs)
 
 
         return model, encoder_model, decoder_model
 
+    def save_network(self, path):
+        self.model.save(path)
+        self.encoder_model.save('encoder_'+path)
+        self.decoder_model.save('decoder_'+path)
+
     def train_network(self, epochs, X_decoder, Y_decoder, X_encoder):
-        self.model.compile(
-            optimizer=tf.keras.optimizers.RMSprop(0.003),
-            loss='mse'
-        )
+
 
         self.model.fit([X_decoder, X_encoder], Y_decoder, epochs=epochs, batch_size=self.batch_size)
 
@@ -260,23 +275,24 @@ class Specialist:
         result = []
         state = self.encoder_model.predict(composer)
 
+        print(state)
+
         steps = len(init) + 100*fs + 1
 
         for step in range(steps):
             outputs, h, c = self.decoder_model.predict([init.reshape(1, init.shape[0], init.shape[1])]
-                                                        + state)
+                                                       + state)
+            # outputs = self.decoder_model.predict(init.reshape(1, init.shape[0], init.shape[1]))
             if step == 0:
                 for output in outputs[0]:
-                    new_output = [1 if x > 0.1 else 0 for x in output]
+                    new_output = [1 if x > 0.15 else 0 for x in output]
                     result.append(new_output)
 
             else:
-                new_output = [1 if x > 0.1 else 0 for x in outputs[0][-1]]
+                new_output = [1 if x > 0.15 else 0 for x in outputs[0][-1]]
 
                 result.append(new_output)
-
-
-            init = np.append(init, outputs[0][-1:], axis=0)
+                init = np.append(init, result[-1:], axis=0)
             state = [h, c]
 
 
