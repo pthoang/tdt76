@@ -115,7 +115,7 @@ class Generalist:
             if(self.check_end_of_song(step)):
                 print(step)
                 break
-            new_step = [1 if x > 0.1 else 0 for x in step]
+            new_step = [1 if x > 0.2 else 0 for x in step]
             result.append(new_step)
 
         # model.reset_states()
@@ -129,7 +129,7 @@ class Generalist:
             # step = [(x - min) / (max - min) for x in step]
             if(self.check_end_of_song(step)):
                 break
-            new_step = [1 if x > 0.17 else 0 for x in step]
+            new_step = [1 if x > 0.2 else 0 for x in step]
             result.append(new_step)
             # X = np.append(X, result[-1:], axis=0)
 
