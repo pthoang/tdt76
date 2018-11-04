@@ -9,7 +9,7 @@ from sklearn import preprocessing
 
 
 def check_end_of_song(step):
-    return len(list(filter(lambda x: x > 0.5, step))) == 128
+    return len(list(filter(lambda x: x > 0.1, step))) == 128
 
 class Generalist:
 
@@ -158,7 +158,7 @@ class SpecialistModel(tf.keras.Model):
         for dim in generalist_dims[1:-1]:
             self.decoder_lstm.append(keras.layers.LSTM(dim, return_sequences=True, stateful=gen_music))
             self.decoder_dropout.append(keras.layers.Dropout(0.2))
-        self.decoder_output = keras.layers.Dense(generalist_dims[-1], activation=('sigmoid' if gen_music else 'relu'))
+        self.decoder_output = keras.layers.Dense(generalist_dims[-1], activation='relu')
         self.tags_embedding = keras.layers.Embedding(2, len(self.decoder_lstm))
 
 
@@ -183,26 +183,55 @@ class Specialist:
         self.generalist = generalist.model
 
 
-        if saved_model:
-            self.model = keras.models.load_model(saved_model)
-            self.encoder_model = keras.models.load_model('encoder_' + saved_model)
-            self.decoder_model = keras.models.load_model('decoder_' + saved_model)
+        self.model =  self.build_network()
+        # if saved_model:
+        #     interim_model = self.build_network()
+        #     interim_model.load_weights(saved_model)
+        #     layers = [0,1,2,3,5]
+        #     for i in layers:
+        #         self.model.layers[i].set_weights(interim_model.layers[i].get_weights())
 
-        else:
-            self.model, self.encoder_model, self.decoder_model = self.build_network()
-            self.model.compile(
-                optimizer=tf.keras.optimizers.RMSprop(0.001),
-                loss='mse'
-            )
+        if saved_model:
+            self.model.load_weights(saved_model)
+
+        self.model.compile(
+            optimizer=tf.keras.optimizers.RMSprop(0.001),
+            loss='mse'
+        )
+
+
+        print(self.model.summary())
+
+    def custom(self, input, gen_music):
+        # input = tf.gather(input, [0,2])
+
+
+        size = 1 if gen_music else self.batch_size
+        input = tf.reshape(input, [size, self.gen_dims[1]])
+        return input
 
 
     def build_network(self, gen_music=False):
 
-        encoder_inputs = keras.layers.Input(shape=(self.num_tags,1))
+
+        encoder_inputs = keras.layers.Input(shape=(1,1))
 
         decoder_inputs = keras.layers.Input(shape=(None, 128))
 
-        decoder_input = keras.layers.Masking(mask_value=0.,
+        encoder_embed_h = keras.layers.Embedding(self.num_tags+1, self.gen_dims[1])
+        encoder_reshape = keras.layers.Reshape((1,self.gen_dims[1]), input_shape=(None, 1, 1, 97))
+        # encoder_embed_lambda = keras.layers.Lambda(lambda input: tf.reshape(input, [1,self.gen_dims[1]]))
+        encoder_embed_lambda = keras.layers.Lambda(lambda input: self.custom(input, gen_music))
+        state_h = encoder_embed_h(encoder_inputs)
+        state_h = encoder_embed_lambda(state_h)
+
+        encoder_embed_c = keras.layers.Embedding(self.num_tags + 1, self.gen_dims[1])
+        state_c = encoder_embed_c(encoder_inputs)
+        state_c = encoder_embed_lambda(state_c)
+
+        init_state = [state_h, state_c]
+
+        decoder_input_layer = keras.layers.Masking(mask_value=0.,
                                              batch_input_shape=(1 if gen_music else
                                                                 self.batch_size, None, 128))
         # decoder_input.set_weights(self.generalist.layers[0].get_weights())
@@ -216,12 +245,11 @@ class Specialist:
 
         # decoder_output.set_weights(self.generalist.layers[-1].get_weights())
 
-        encoder = keras.layers.LSTM(self.gen_dims[1], return_sequences=True, return_state=True)
+        # encoder = keras.layers.LSTM(self.gen_dims[1], return_sequences=True, return_state=True)
 
-        encoder_outputs, state_h, state_c = encoder(encoder_inputs)
-        init_state = [state_h, state_c]
+        # encoder_outputs, state_h, state_c = encoder(encoder_inputs)
 
-        output = decoder_input(decoder_inputs)
+        output = decoder_input_layer(decoder_inputs)
         # print(self.num_tags)
 
         output, _, _ = decoder_lstm(output, initial_state=init_state)
@@ -231,39 +259,45 @@ class Specialist:
 
         model = keras.Model([decoder_inputs, encoder_inputs], output)
 
-        copy_weight_indexes = [2,4,5,6]
+        for i, layer in enumerate(model.layers):
+            print(i, layer)
+
+
+        copy_weight_indexes = [4,6,7,8]
 
         for i, layer_i in enumerate(copy_weight_indexes):
             model.layers[layer_i].set_weights(self.generalist.layers[i].get_weights())
 
 
+
+
         # inference models
-        encoder_model = keras.Model(encoder_inputs, init_state)
+        # encoder_model = keras.Model(encoder_inputs, init_state)
+        #
+        # decoder_state_h = keras.Input(shape=(self.gen_dims[1],))
+        # decoder_state_c = keras.Input(shape=(self.gen_dims[1],))
+        # decoder_init_state = [decoder_state_h, decoder_state_c]
+        #
+        # decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs,
+        #                                                  initial_state=decoder_init_state
+        #                                                  )
+        #
+        # decoder_state = [state_h, state_c]
+        #
+        # decoder_outputs = decoder_output(decoder_outputs)
+        #
+        # decoder_model = keras.Model([decoder_inputs] + decoder_init_state,
+        #                             [decoder_outputs] + decoder_state)
+        # # decoder_model = keras.Model(decoder_inputs,
+        # #                             decoder_outputs)
+        #
+        #
+        # return model, encoder_model, decoder_model
 
-        decoder_state_h = keras.Input(shape=(self.gen_dims[1],))
-        decoder_state_c = keras.Input(shape=(self.gen_dims[1],))
-        decoder_init_state = [decoder_state_h, decoder_state_c]
-
-        decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs,
-                                                         initial_state=decoder_init_state
-                                                         )
-
-        decoder_state = [state_h, state_c]
-
-        decoder_outputs = decoder_output(decoder_outputs)
-
-        decoder_model = keras.Model([decoder_inputs] + decoder_init_state,
-                                    [decoder_outputs] + decoder_state)
-        # decoder_model = keras.Model(decoder_inputs,
-        #                             decoder_outputs)
-
-
-        return model, encoder_model, decoder_model
+        return model
 
     def save_network(self, path):
-        self.model.save(path)
-        self.encoder_model.save('encoder_'+path)
-        self.decoder_model.save('decoder_'+path)
+        self.model.save_weights(path)
 
     def train_network(self, epochs, X_decoder, Y_decoder, X_encoder):
 
@@ -273,27 +307,50 @@ class Specialist:
     def gen_music(self, init, composer, fs=5):
 
         result = []
-        state = self.encoder_model.predict(composer)
 
-        print(state)
+        model = self.build_network(gen_music=True)
+        model.set_weights(self.model.get_weights())
 
-        steps = len(init) + 100*fs + 1
+        pred = model.predict([init.reshape(1, init.shape[0], init.shape[1]), composer])
 
-        for step in range(steps):
-            outputs, h, c = self.decoder_model.predict([init.reshape(1, init.shape[0], init.shape[1])]
-                                                       + state)
-            # outputs = self.decoder_model.predict(init.reshape(1, init.shape[0], init.shape[1]))
-            if step == 0:
-                for output in outputs[0]:
-                    new_output = [1 if x > 0.15 else 0 for x in output]
-                    result.append(new_output)
+        for step in pred[0]:
+            if(check_end_of_song(step)):
+                print(step)
+                break
+            new_step = [1 if x > 0.15 else 0 for x in step]
+            result.append(new_step)
 
-            else:
-                new_output = [1 if x > 0.15 else 0 for x in outputs[0][-1]]
+        X = init
+        X = np.append(X, result[-1:], axis=0)
+        for i in range(100 * fs):
+            step = model.predict([X.reshape(1, X.shape[0], X.shape[1]), composer])[0][-1]
+            if (check_end_of_song(step)):
+                break
+            new_step = [1 if x > 0.15 else 0 for x in step]
+            result.append(new_step)
+            X = np.append(X, result[-1:], axis=0)
 
-                result.append(new_output)
-                init = np.append(init, result[-1:], axis=0)
-            state = [h, c]
+        # state = self.encoder_model.predict(composer)
+        #
+        # print(state)
+        #
+        # steps = len(init) + 100*fs + 1
+        #
+        # for step in range(steps):
+        #     outputs, h, c = self.decoder_model.predict([init.reshape(1, init.shape[0], init.shape[1])]
+        #                                                + state)
+        #     # outputs = self.decoder_model.predict(init.reshape(1, init.shape[0], init.shape[1]))
+        #     if step == 0:
+        #         for output in outputs[0]:
+        #             new_output = [1 if x > 0 else 0 for x in output]
+        #             result.append(new_output)
+        #
+        #     else:
+        #         new_output = [1 if x > 0 else 0 for x in outputs[0][-1]]
+        #
+        #         result.append(new_output)
+        #         init = np.append(init, result[-1:], axis=0)
+        #     state = [h, c]
 
 
         return np.array(result).T

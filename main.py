@@ -59,7 +59,8 @@ def main():
     names = copy.deepcopy(names_f1)
     names.extend(names_f2)
     unique_names = sorted(list(set(names)))
-    names_index = [one_hot_encode(len(unique_names),unique_names.index(name)) for name in names]
+    # names_index = [one_hot_encode(len(unique_names),unique_names.index(name)) for name in names]
+    names_index = [[[unique_names.index(name)]] for name in names]
 
     training_data = copy.deepcopy(training_data_f1)
 
@@ -68,27 +69,31 @@ def main():
     # training_data.extend(training_data_f1)
 
 
-    song_index = 1
-    test = dataprep.test_piano_roll(training_data_f5[song_index], 15, fs=5)
+    song_index = 0
+    fs = 5
+    test = dataprep.test_piano_roll(training_data_f5[song_index], 10, fs=fs)
+    test2 = dataprep.test_piano_roll(training_data_f5[song_index], 155, fs=fs)
 
     # dataprep.piano_roll_to_mid_file(training_data[0], 'test1.mid', fs=5)
 
     # dataprep.visualize_piano_roll(training_data[0], fs=5)
 
-    path = 'generalist_lstm.h5'
+    path = 'generalist_lstm_v2.h5'
     generalist = c.Generalist([128, 97, 128], len(training_data_f5), 'lstm', path)
+
 
     X, Y = preprocess_data(training_data)
 
 
-    # generalist.train_network(1, X, Y)
+    # generalist.train_network(550, X, Y)
 
     # generalist.save_network(path)
-    # generalist_result = generalist.gen_music(test.T, fs=5)
+    generalist_result = generalist.gen_music(test.T, fs=fs)
 
+    # dataprep.visualize_piano_roll(test2, fs=fs)
+    dataprep.visualize_piano_roll(generalist_result, fs=fs)
+    dataprep.piano_roll_to_mid_file(generalist_result, 'gen_res.mid', fs=fs)
 
-    # dataprep.visualize_piano_roll(generalist_result, fs=5)
-    # dataprep.piano_roll_to_mid_file(generalist_result, 'gen_res1.mid', fs=5)
 
     path = 'specialist_lstm.h5'
 
@@ -96,12 +101,12 @@ def main():
 
 
     # specialist.train_network(10, X, Y, np.array(names_index))
-
     # specialist.save_network(path)
 
-    specialist_result = specialist.gen_music(test.T, np.array([names_index[song_index]]), fs=5)
+    specialist_result = specialist.gen_music(test.T, np.array([names_index[25]]), fs=fs)
 
-    dataprep.visualize_piano_roll(specialist_result, fs=5)
+    dataprep.visualize_piano_roll(specialist_result, fs=fs)
+
     # dataprep.piano_roll_to_mid_file(specialist_result, 'spes_res.mid', fs=5)
 
 
