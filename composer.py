@@ -17,6 +17,7 @@ class Generalist:
         self.dims = dims
         self.batch_size = batch_size
         self.type = type
+        self.history = None
 
         self.model = keras.models.load_model(saved_model) if saved_model else self.build_network()
         if not saved_model: self.init_network()
@@ -53,7 +54,7 @@ class Generalist:
 
     def train_network(self, epochs, X, Y):
 
-        self.model.fit(X, Y, epochs=epochs, batch_size=self.batch_size)
+        self.history = self.model.fit(X, Y, epochs=epochs, batch_size=self.batch_size)
 
         # for i in range(epochs):
         #     print("Epoch number: " + str(i+1))
